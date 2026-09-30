@@ -1,0 +1,7 @@
+{
+  "name": "Smart Connect - Luxury E-Commerce Pakistan",
+  "description": "Smart Connect is Pakistan's premier luxury online shopping destination featuring curated electronics, horology, fragrances, and lifestyle accessories in Pakistani Rupees (Rs.).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
