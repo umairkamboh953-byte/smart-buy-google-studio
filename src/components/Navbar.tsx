@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
 import { SmartConnectLogo } from './SmartConnectLogo.tsx';
+import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
 import {
   ShoppingCart,
   Search,
@@ -236,12 +237,10 @@ export const Navbar: React.FC = () => {
                           <div className="flex items-center gap-2.5">
                             <div className="w-6 h-6 rounded-lg overflow-hidden bg-slate-800 shrink-0">
                               <img
-                                src={cat.image}
+                                src={sanitizeImagePath(cat.image, FALLBACK_IMAGE)}
                                 alt={cat.name}
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
+                                onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
                               />
                             </div>
                             <span className="font-medium group-hover:text-[#c5a880] transition-colors">

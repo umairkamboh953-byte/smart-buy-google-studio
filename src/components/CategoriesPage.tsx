@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
+import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
 import {
   Layers,
   ArrowRight,
@@ -139,13 +140,11 @@ export const CategoriesPage: React.FC = () => {
                   {/* Category Image Cover */}
                   <div className="relative aspect-[16/10] overflow-hidden bg-[#0c111a]">
                     <img
-                      src={cat.image}
+                      src={sanitizeImagePath(cat.image, FALLBACK_IMAGE)}
                       alt={cat.name}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
+                      onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#121824] via-[#121824]/40 to-transparent" />
 

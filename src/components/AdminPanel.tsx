@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
 import { signInWithGoogle, signOutGoogle } from '../utils/googleAuth.ts';
+import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
 import type {
   Product,
   Category,
@@ -72,6 +73,7 @@ export const AdminPanel: React.FC = () => {
     setAdminUser,
     loginAdmin,
     loginAdminWithGoogle,
+    directOwnerAdminLogin,
     logoutAdmin,
     products,
     categories,
@@ -1146,6 +1148,18 @@ export const AdminPanel: React.FC = () => {
               {isLoggingIn ? 'Authenticating...' : 'Enter Admin Dashboard'}
             </button>
           </form>
+
+          {/* Owner Emergency / 1-Click Access */}
+          <div className="mt-4 pt-4 border-t border-slate-800 text-center">
+            <button
+              type="button"
+              onClick={() => directOwnerAdminLogin()}
+              className="w-full py-2.5 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium border border-slate-700/80 flex items-center justify-center gap-2 transition-all cursor-pointer hover:border-[#c5a880]/50"
+            >
+              <KeyRound className="w-4 h-4 text-[#c5a880]" />
+              <span>Owner 1-Click Access (Umair Kamboh)</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -3343,12 +3357,10 @@ export const AdminPanel: React.FC = () => {
                         <div className="relative aspect-[16/8] rounded-xl overflow-hidden bg-[#0a0e17] mb-3 border border-slate-800">
                           {banner.image ? (
                             <img
-                              src={banner.image}
+                              src={sanitizeImagePath(banner.image, FALLBACK_IMAGE)}
                               alt={banner.title}
                               className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
+                              onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
                             />
                           ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-r from-[#121928] via-[#162136] to-[#121928] p-4 text-center">

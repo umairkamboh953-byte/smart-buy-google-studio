@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext.tsx';
+import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
 import { ArrowUpRight } from 'lucide-react';
 
 export const CategoriesSection: React.FC = () => {
@@ -46,13 +47,11 @@ export const CategoriesSection: React.FC = () => {
               {/* Category Background Image */}
               <div className="absolute inset-0 z-0">
                 <img
-                  src={cat.image}
+                  src={sanitizeImagePath(cat.image, FALLBACK_IMAGE)}
                   alt={cat.name}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover opacity-40 group-hover:opacity-60 group-hover:scale-105 transition-all duration-500"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
+                  onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0b0f17] via-[#0b0f17]/70 to-transparent" />
               </div>

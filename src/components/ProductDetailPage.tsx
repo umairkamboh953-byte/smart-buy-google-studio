@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
+import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
 import type { Product, ProductReview } from '../types/index.ts';
 import { formatPKR, formatDate } from '../utils/formatters.ts';
 import { ProductCard } from './ProductCard.tsx';
@@ -182,10 +183,11 @@ export const ProductDetailPage: React.FC = () => {
             {/* Primary Featured Image Frame */}
             <div className="relative aspect-[4/3] sm:aspect-[16/11] rounded-2xl overflow-hidden bg-[#121824] border border-[#1e293b] shadow-2xl flex items-center justify-center group">
               <img
-                src={activeImage}
+                src={sanitizeImagePath(activeImage, FALLBACK_IMAGE)}
                 alt={product.name}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover object-center transition-all duration-500 ease-out group-hover:scale-105"
+                onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
               />
 
               {product.discountPercentage ? (
@@ -224,10 +226,11 @@ export const ProductDetailPage: React.FC = () => {
                     }`}
                   >
                     <img
-                      src={img}
+                      src={sanitizeImagePath(img, FALLBACK_IMAGE)}
                       alt={`${product.name} view ${idx + 1}`}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
+                      onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
                     />
                   </button>
                 ))}

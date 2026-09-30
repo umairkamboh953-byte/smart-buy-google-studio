@@ -2,6 +2,7 @@ import React from 'react';
 import type { Product } from '../types/index.ts';
 import { useStore } from '../context/StoreContext.tsx';
 import { formatPKR } from '../utils/formatters.ts';
+import { sanitizeImagePath, handleImageError } from '../utils/imageUtils.ts';
 import { Star, Heart, Eye, ShoppingCart, Check } from 'lucide-react';
 
 interface ProductCardProps {
@@ -35,13 +36,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       {/* Visual Image Slot */}
       <div className="relative aspect-square sm:aspect-[4/3] w-full overflow-hidden bg-[#0c121e]">
         <img
-          src={product.mainImage || product.images[0]}
+          src={sanitizeImagePath(product.mainImage || product.images?.[0])}
           alt={product.name}
           referrerPolicy="no-referrer"
           className="h-full w-full object-cover object-center transition-transform duration-500 ease-out group-hover:scale-105"
-          onError={(e) => {
-            (e.target as HTMLElement).style.display = 'none';
-          }}
+          onError={(e) => handleImageError(e)}
         />
 
         {/* Gradient Scrim for Contrast */}

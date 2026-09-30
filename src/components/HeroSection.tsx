@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
+import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
 import {
   ArrowRight,
   Sparkles,
@@ -163,13 +164,11 @@ export const HeroSection: React.FC = () => {
               <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-[#0c121e]">
                 <img
                   key={activeBanner.id + activeBanner.image}
-                  src={activeBanner.image || '/assets/images/hero_luxury_showcase_1790499579518.jpg'}
+                  src={sanitizeImagePath(activeBanner.image, FALLBACK_IMAGE)}
                   alt={activeBanner.title}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover transition-all duration-700 ease-out group-hover:scale-105"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
+                  onError={(e) => handleImageError(e, FALLBACK_IMAGE)}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0b0f17] via-transparent to-transparent opacity-60" />
               </div>
