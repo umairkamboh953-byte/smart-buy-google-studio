@@ -359,7 +359,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
+          // Avoid overwriting if local edits are newer
+          try {
+            const localRaw = localStorage.getItem('sc_products');
+            if (localRaw) {
+              const localProds = JSON.parse(localRaw);
+              const localLatestTime = Math.max(...localProds.map((p: any) => new Date(p.updatedAt || 0).getTime()));
+              const serverLatestTime = Math.max(...data.map((p: any) => new Date(p.updatedAt || 0).getTime()));
+              if (localLatestTime > serverLatestTime && localProds.length > 0) {
+                return;
+              }
+            }
+          } catch {}
+
           setProducts(data);
+          try {
+            localStorage.setItem('sc_products', JSON.stringify(data));
+          } catch {}
         }
       }
     } catch (err) {
@@ -374,6 +390,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           setCategories(data);
+          try {
+            localStorage.setItem('sc_categories', JSON.stringify(data));
+          } catch {}
         }
       }
     } catch (err) {
@@ -387,7 +406,32 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (res && res.ok) {
         const data = await res.json();
         if (data && data.storeName) {
+          // Avoid overwriting if local edits are newer
+          try {
+            const localRaw = localStorage.getItem('sc_settings');
+            if (localRaw) {
+              const localParsed = JSON.parse(localRaw);
+              const localTime = new Date(localParsed.updatedAt || 0).getTime();
+              const serverTime = new Date(data.updatedAt || 0).getTime();
+              if (localTime > serverTime && localParsed.storeName) {
+                // Local edits are fresher! Push them to server
+                safeFetch('/api/settings', {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer smart-connect-admin-secure-token-2026',
+                  },
+                  body: JSON.stringify(localParsed),
+                }).catch(() => {});
+                return;
+              }
+            }
+          } catch {}
+
           setSettings(data);
+          try {
+            localStorage.setItem('sc_settings', JSON.stringify(data));
+          } catch {}
         }
       }
     } catch (err) {
@@ -401,6 +445,45 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
     syncData();
   }, [refreshProducts, refreshCategories, refreshSettings]);
+
+  // Real-time Multi-Tab Sync: When changes occur in any tab, update immediately in all other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!e.key || !e.newValue) return;
+      try {
+        if (e.key === 'sc_settings') {
+          const updated = JSON.parse(e.newValue);
+          if (updated && updated.storeName) {
+            setSettings(updated);
+          }
+        } else if (e.key === 'sc_products') {
+          const updated = JSON.parse(e.newValue);
+          if (Array.isArray(updated) && updated.length > 0) {
+            setProducts(updated);
+          }
+        } else if (e.key === 'sc_categories') {
+          const updated = JSON.parse(e.newValue);
+          if (Array.isArray(updated) && updated.length > 0) {
+            setCategories(updated);
+          }
+        } else if (e.key === 'sc_cart') {
+          const updated = JSON.parse(e.newValue);
+          if (Array.isArray(updated)) {
+            setCart(updated);
+          }
+        } else if (e.key === 'sc_admin_token') {
+          setAdminToken(e.newValue);
+        } else if (e.key === 'sc_admin_user') {
+          setAdminUser(JSON.parse(e.newValue));
+        }
+      } catch (err) {
+        console.warn('Multi-tab storage sync notice:', err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Navigation helper
   const navigateTo = (view: ViewType, productId?: string | null) => {
@@ -622,7 +705,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch {}
 
     if ((isMasterEmail && isMasterPass) || isOwner || matchesCustom) {
-      const token = `sc_adm_${Date.now()}`;
+      const token = 'smart-connect-admin-secure-token-2026';
       const user = {
         id: isOwner ? 'admin-owner' : 'admin-01',
         email: cleanEmail || 'admin@smartbuy.pk',
@@ -691,7 +774,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const directOwnerAdminLogin = async (): Promise<boolean> => {
-    const token = `owner_direct_${Date.now()}`;
+    const token = 'smart-connect-admin-secure-token-2026';
     const user = {
       id: 'admin-owner',
       email: 'umairkamboh953@gmail.com',
@@ -730,19 +813,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return true;
       }
 
-      // Safe fallback if server endpoint had an issue
-      const fallbackToken = `adm_token_google_${Date.now()}`;
+      // Safe fallback if server endpoint had an issue or on static hosts like Netlify
+      const fallbackToken = 'smart-connect-admin-secure-token-2026';
       const fallbackUser = {
-        id: `admin-google-${Date.now()}`,
-        email: googleUser.email,
-        name: googleUser.name || 'Google Admin',
+        id: googleUser.googleId || `admin-google-${Date.now()}`,
+        email: googleUser.email || 'umairkamboh953@gmail.com',
+        name: googleUser.name || 'Umair Kamboh (Google Admin)',
         role: 'super_admin' as const,
       };
       setAdminToken(fallbackToken);
       setAdminUser(fallbackUser);
       localStorage.setItem('sc_admin_token', fallbackToken);
       localStorage.setItem('sc_admin_user', JSON.stringify(fallbackUser));
-      showToast(`Welcome to Smart Connect Admin Portal (${googleUser.email})`, 'success');
+      showToast(`Welcome back, ${fallbackUser.name}!`, 'success');
       return true;
     } catch (err: any) {
       showToast(err.message || 'Error signing in with Google', 'error');
