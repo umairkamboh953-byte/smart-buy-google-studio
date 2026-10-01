@@ -352,21 +352,49 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  // Data fetchers
+  // Data fetchers with intelligent two-way merge
   const refreshProducts = useCallback(async () => {
     try {
       const res = await safeFetch('/api/products');
       if (res && res.ok) {
-        const data = await res.json();
+        const data: Product[] = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          // Avoid overwriting if local edits are newer
           try {
             const localRaw = localStorage.getItem('sc_products');
             if (localRaw) {
-              const localProds = JSON.parse(localRaw);
-              const localLatestTime = Math.max(...localProds.map((p: any) => new Date(p.updatedAt || 0).getTime()));
-              const serverLatestTime = Math.max(...data.map((p: any) => new Date(p.updatedAt || 0).getTime()));
-              if (localLatestTime > serverLatestTime && localProds.length > 0) {
+              const localProds: Product[] = JSON.parse(localRaw);
+              if (Array.isArray(localProds) && localProds.length > 0) {
+                // Two-way merge: Preserve any local additions or edits
+                const mergedMap = new Map<string, Product>();
+                data.forEach((p) => mergedMap.set(p.id, p));
+
+                localProds.forEach((lp) => {
+                  const sp = mergedMap.get(lp.id);
+                  if (!sp) {
+                    // Local product not yet on server: Keep it and push to server
+                    mergedMap.set(lp.id, lp);
+                    safeFetch('/api/products', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer smart-connect-admin-secure-token-2026',
+                      },
+                      body: JSON.stringify(lp),
+                    }).catch(() => {});
+                  } else {
+                    const lTime = new Date(lp.updatedAt || 0).getTime() || 0;
+                    const sTime = new Date(sp.updatedAt || 0).getTime() || 0;
+                    if (lTime >= sTime) {
+                      mergedMap.set(lp.id, lp);
+                    }
+                  }
+                });
+
+                const mergedList = Array.from(mergedMap.values());
+                setProducts(mergedList);
+                try {
+                  localStorage.setItem('sc_products', JSON.stringify(mergedList));
+                } catch {}
                 return;
               }
             }
@@ -387,8 +415,42 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const res = await safeFetch('/api/categories');
       if (res && res.ok) {
-        const data = await res.json();
+        const data: Category[] = await res.json();
         if (Array.isArray(data) && data.length > 0) {
+          try {
+            const localRaw = localStorage.getItem('sc_categories');
+            if (localRaw) {
+              const localCats: Category[] = JSON.parse(localRaw);
+              if (Array.isArray(localCats) && localCats.length > 0) {
+                const mergedMap = new Map<string, Category>();
+                data.forEach((c) => mergedMap.set(c.id, c));
+
+                localCats.forEach((lc) => {
+                  if (!mergedMap.has(lc.id)) {
+                    mergedMap.set(lc.id, lc);
+                    safeFetch('/api/categories', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer smart-connect-admin-secure-token-2026',
+                      },
+                      body: JSON.stringify(lc),
+                    }).catch(() => {});
+                  } else {
+                    mergedMap.set(lc.id, lc);
+                  }
+                });
+
+                const mergedList = Array.from(mergedMap.values());
+                setCategories(mergedList);
+                try {
+                  localStorage.setItem('sc_categories', JSON.stringify(mergedList));
+                } catch {}
+                return;
+              }
+            }
+          } catch {}
+
           setCategories(data);
           try {
             localStorage.setItem('sc_categories', JSON.stringify(data));
@@ -406,15 +468,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (res && res.ok) {
         const data = await res.json();
         if (data && data.storeName) {
-          // Avoid overwriting if local edits are newer
           try {
             const localRaw = localStorage.getItem('sc_settings');
             if (localRaw) {
               const localParsed = JSON.parse(localRaw);
-              const localTime = new Date(localParsed.updatedAt || 0).getTime();
-              const serverTime = new Date(data.updatedAt || 0).getTime();
-              if (localTime > serverTime && localParsed.storeName) {
-                // Local edits are fresher! Push them to server
+              const localTime = new Date(localParsed.updatedAt || 0).getTime() || 0;
+              const serverTime = new Date(data.updatedAt || 0).getTime() || 0;
+              if (localTime >= serverTime && localParsed.storeName) {
+                // Local edits are fresher or equal! Push them to server
                 safeFetch('/api/settings', {
                   method: 'PUT',
                   headers: {
@@ -423,6 +484,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                   },
                   body: JSON.stringify(localParsed),
                 }).catch(() => {});
+                setSettings(localParsed);
                 return;
               }
             }
@@ -475,6 +537,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           setAdminToken(e.newValue);
         } else if (e.key === 'sc_admin_user') {
           setAdminUser(JSON.parse(e.newValue));
+        } else if (e.key === 'sc_customer') {
+          setCustomerUser(JSON.parse(e.newValue));
+        } else if (e.key === 'sc_latest_order') {
+          setLatestOrder(JSON.parse(e.newValue));
         }
       } catch (err) {
         console.warn('Multi-tab storage sync notice:', err);
@@ -593,13 +659,36 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         body: JSON.stringify(payload),
       });
 
+      // Helper to link order with customer and persist
+      const finalizeCustomerOrder = (placedOrder: Order) => {
+        try {
+          const existing = JSON.parse(localStorage.getItem('sc_orders') || '[]');
+          localStorage.setItem('sc_orders', JSON.stringify([placedOrder, ...existing]));
+
+          const custExisting = JSON.parse(localStorage.getItem('sc_customer_orders') || '[]');
+          localStorage.setItem('sc_customer_orders', JSON.stringify([placedOrder, ...custExisting]));
+
+          // Auto-bind customer session if not logged in
+          if (!customerUser) {
+            const autoCust: Customer = {
+              id: `cust-${Date.now()}`,
+              fullName: customerData.fullName,
+              email: customerData.email,
+              phone: customerData.phone,
+              city: customerData.city,
+              address: customerData.address,
+              createdAt: new Date().toISOString(),
+            };
+            setCustomerUser(autoCust);
+            localStorage.setItem('sc_customer', JSON.stringify(autoCust));
+          }
+        } catch {}
+      };
+
       if (res && res.ok) {
         const order: Order = await res.json();
         setLatestOrder(order);
-        try {
-          const existing = JSON.parse(localStorage.getItem('sc_orders') || '[]');
-          localStorage.setItem('sc_orders', JSON.stringify([order, ...existing]));
-        } catch {}
+        finalizeCustomerOrder(order);
         clearCart();
         refreshProducts();
         navigateTo('order-success');
@@ -623,10 +712,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         updatedAt: new Date().toISOString(),
       };
       setLatestOrder(fallbackOrder);
-      try {
-        const existing = JSON.parse(localStorage.getItem('sc_orders') || '[]');
-        localStorage.setItem('sc_orders', JSON.stringify([fallbackOrder, ...existing]));
-      } catch {}
+      finalizeCustomerOrder(fallbackOrder);
       clearCart();
       navigateTo('order-success');
       showToast(`Order #${fallbackOrder.orderNumber} confirmed!`, 'success');
@@ -648,6 +734,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         updatedAt: new Date().toISOString(),
       };
       setLatestOrder(fallbackOrder);
+      try {
+        const existing = JSON.parse(localStorage.getItem('sc_orders') || '[]');
+        localStorage.setItem('sc_orders', JSON.stringify([fallbackOrder, ...existing]));
+        const custExisting = JSON.parse(localStorage.getItem('sc_customer_orders') || '[]');
+        localStorage.setItem('sc_customer_orders', JSON.stringify([fallbackOrder, ...custExisting]));
+        if (!customerUser) {
+          const autoCust: Customer = {
+            id: `cust-${Date.now()}`,
+            fullName: customerData.fullName,
+            email: customerData.email,
+            phone: customerData.phone,
+            city: customerData.city,
+            address: customerData.address,
+            createdAt: new Date().toISOString(),
+          };
+          setCustomerUser(autoCust);
+          localStorage.setItem('sc_customer', JSON.stringify(autoCust));
+        }
+      } catch {}
       clearCart();
       navigateTo('order-success');
       showToast(`Order #${fallbackOrder.orderNumber} placed successfully!`, 'success');

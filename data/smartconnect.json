@@ -399,7 +399,7 @@
       "description": "Precision horology and handcrafted executive timepieces.",
       "image": "/src/assets/images/product_chronograph_watch_1790499593612.jpg",
       "isVisible": true,
-      "productCount": 1
+      "productCount": 2
     },
     {
       "id": "cat-electronics",
@@ -605,6 +605,16 @@
       "city": "Lahore",
       "province": "Punjab",
       "createdAt": "2026-03-01T09:15:00.000Z"
+    },
+    {
+      "id": "cust-1790869931156",
+      "fullName": "Umair Test",
+      "email": "umairtest@gmail.com",
+      "phone": "0300-1234567",
+      "address": "Gulberg III",
+      "city": "Lahore",
+      "province": "Punjab",
+      "createdAt": "2026-10-01T15:52:11.156Z"
     }
   ],
   "adminUsers": [
@@ -662,7 +672,7 @@
     }
   ],
   "settings": {
-    "storeName": "Smart Buy",
+    "storeName": "Smart Connect",
     "tagline": "Connect With What You Love",
     "announcementBar": {
       "enabled": true,
@@ -752,7 +762,8 @@
         "order": 1
       }
     ],
-    "logoUrl": "/uploads/WhatsApp_Image_2026-09-24_at_6_28_22_PM_jpeg_1790683264749.jpg"
+    "logoUrl": "/uploads/WhatsApp_Image_2026-09-24_at_6_28_22_PM_jpeg_1790683264749.jpg",
+    "updatedAt": "2026-10-01T15:48:50.600Z"
   },
   "wishlists": {}
 }

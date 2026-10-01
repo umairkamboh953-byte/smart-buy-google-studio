@@ -795,14 +795,27 @@ class Database {
     return this.data.products.find((p) => p.id === id || p.slug === id);
   }
 
-  public addProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Product {
-    const id = `prod-sc-${Date.now()}`;
+  public addProduct(product: Partial<Product> & { name: string; price: number }): Product {
+    const id = product.id || `prod-sc-${Date.now()}`;
     const newProduct: Product = {
       ...product,
       id,
-      createdAt: new Date().toISOString(),
+      slug: product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      createdAt: product.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+    } as Product;
+
+    const existingIndex = this.data.products.findIndex((p) => p.id === id);
+    if (existingIndex !== -1) {
+      this.data.products[existingIndex] = {
+        ...this.data.products[existingIndex],
+        ...newProduct,
+      };
+      this.updateCategoryProductCounts();
+      this.save();
+      return this.data.products[existingIndex];
+    }
+
     this.data.products.unshift(newProduct);
     this.updateCategoryProductCounts();
     this.save();
@@ -811,7 +824,9 @@ class Database {
 
   public updateProduct(id: string, updates: Partial<Product>): Product | null {
     const index = this.data.products.findIndex((p) => p.id === id);
-    if (index === -1) return null;
+    if (index === -1) {
+      return this.addProduct({ ...updates, id } as any);
+    }
 
     this.data.products[index] = {
       ...this.data.products[index],
@@ -840,13 +855,29 @@ class Database {
     return this.data.categories;
   }
 
-  public addCategory(cat: Omit<Category, 'id' | 'productCount'>): Category {
-    const id = `cat-${Date.now()}`;
+  public addCategory(cat: Partial<Category> & { name: string }): Category {
+    const id = cat.id || `cat-${Date.now()}`;
     const newCat: Category = {
       ...cat,
       id,
-      productCount: 0,
-    };
+      slug: cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      productCount: cat.productCount || 0,
+      isVisible: cat.isVisible !== false,
+    } as Category;
+
+    const existingIndex = this.data.categories.findIndex(
+      (c) => c.id === id || c.name.toLowerCase() === cat.name.toLowerCase()
+    );
+    if (existingIndex !== -1) {
+      this.data.categories[existingIndex] = {
+        ...this.data.categories[existingIndex],
+        ...newCat,
+      };
+      this.updateCategoryProductCounts();
+      this.save();
+      return this.data.categories[existingIndex];
+    }
+
     this.data.categories.push(newCat);
     this.updateCategoryProductCounts();
     this.save();
@@ -855,12 +886,15 @@ class Database {
 
   public updateCategory(id: string, updates: Partial<Category>): Category | null {
     const index = this.data.categories.findIndex((c) => c.id === id);
-    if (index === -1) return null;
+    if (index === -1) {
+      return this.addCategory({ ...updates, id } as any);
+    }
     this.data.categories[index] = {
       ...this.data.categories[index],
       ...updates,
       id,
     };
+    this.updateCategoryProductCounts();
     this.save();
     return this.data.categories[index];
   }
@@ -891,16 +925,21 @@ class Database {
   }
 
   public getCustomerOrders(query: string): Order[] {
-    const cleanQuery = query.toLowerCase().trim();
-    const phoneDigits = query.replace(/\D/g, '');
+    const cleanQuery = (query || '').toLowerCase().trim();
+    const phoneDigits = (query || '').replace(/\D/g, '');
     return this.data.orders
       .filter((o) => {
+        if (!o || !o.customer) return false;
+        const ordNum = (o.orderNumber || '').toLowerCase().trim();
+        const ordId = (o.id || '').toLowerCase().trim();
         const custEmail = (o.customer.email || '').toLowerCase().trim();
         const custPhone = (o.customer.phone || '').replace(/\D/g, '');
+        const custName = (o.customer.fullName || '').toLowerCase().trim();
         return (
-          custEmail === cleanQuery ||
-          (phoneDigits.length >= 7 && custPhone.includes(phoneDigits)) ||
-          (phoneDigits.length >= 7 && phoneDigits.includes(custPhone))
+          (cleanQuery && (ordNum === cleanQuery || ordNum.includes(cleanQuery) || ordId === cleanQuery || ordId.includes(cleanQuery))) ||
+          (cleanQuery && (custEmail === cleanQuery || custEmail.includes(cleanQuery) || cleanQuery.includes(custEmail))) ||
+          (cleanQuery && (custName === cleanQuery || custName.includes(cleanQuery))) ||
+          (phoneDigits.length >= 7 && (custPhone.includes(phoneDigits) || phoneDigits.includes(custPhone)))
         );
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -1046,6 +1085,7 @@ class Database {
     this.data.settings = {
       ...this.data.settings,
       ...settings,
+      updatedAt: new Date().toISOString(),
     };
     this.save();
     return this.data.settings;

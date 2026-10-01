@@ -220,6 +220,7 @@ export interface WebsiteSettings {
     story: string;
   };
   footerText: string;
+  updatedAt?: string;
 }
 
 export interface CartItem {
