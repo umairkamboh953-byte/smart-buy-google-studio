@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
 import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
+import { apiUrl } from '../utils/apiConfig.ts';
 import type { Product, ProductReview } from '../types/index.ts';
 import { formatPKR, formatDate } from '../utils/formatters.ts';
 import { ProductCard } from './ProductCard.tsx';
@@ -68,7 +69,7 @@ export const ProductDetailPage: React.FC = () => {
   const fetchReviews = async (pId: string) => {
     try {
       setIsLoadingReviews(true);
-      const res = await fetch(`/api/reviews?productId=${pId}`);
+      const res = await fetch(apiUrl(`/api/reviews?productId=${pId}`));
       if (res.ok) {
         const data = await res.json();
         setReviews(data);
@@ -130,7 +131,7 @@ export const ProductDetailPage: React.FC = () => {
 
     try {
       setIsSubmittingReview(true);
-      const res = await fetch('/api/reviews', {
+      const res = await fetch(apiUrl('/api/reviews'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

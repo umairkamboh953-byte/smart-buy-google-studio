@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../context/StoreContext.tsx';
 import { signInWithGoogle, signOutGoogle } from '../utils/googleAuth.ts';
 import { sanitizeImagePath, handleImageError, FALLBACK_IMAGE } from '../utils/imageUtils.ts';
+import { apiUrl } from '../utils/apiConfig.ts';
 import type {
   Product,
   Category,
@@ -91,6 +92,10 @@ export const AdminPanel: React.FC = () => {
 
   const getAuthToken = () => {
     return adminToken || localStorage.getItem('sc_admin_token') || 'smart-connect-admin-secure-token-2026';
+  };
+
+  const adminFetch = (endpoint: string, options?: RequestInit) => {
+    return fetch(apiUrl(endpoint), options);
   };
 
   // Login form states
@@ -202,7 +207,7 @@ export const AdminPanel: React.FC = () => {
 
   // Fetch current admin email from server (for login card and profile)
   useEffect(() => {
-    fetch('/api/auth/admin-info')
+    adminFetch('/api/auth/admin-info')
       .then((r) => r.json())
       .then((data) => {
         if (data?.email) {
@@ -246,7 +251,7 @@ export const AdminPanel: React.FC = () => {
 
     setIsUpdatingCreds(true);
     try {
-      const res = await fetch('/api/admin/credentials', {
+      const res = await adminFetch('/api/admin/credentials', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -311,7 +316,7 @@ export const AdminPanel: React.FC = () => {
   const fetchMetrics = async () => {
     try {
       setLoadingMetrics(true);
-      const res = await fetch('/api/admin/metrics', {
+      const res = await adminFetch('/api/admin/metrics', {
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
       if (res.ok) {
@@ -327,7 +332,7 @@ export const AdminPanel: React.FC = () => {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders', {
+      const res = await adminFetch('/api/orders', {
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
       const contentType = res.headers.get('content-type') || '';
@@ -353,7 +358,7 @@ export const AdminPanel: React.FC = () => {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('/api/customers', {
+      const res = await adminFetch('/api/customers', {
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
       if (res.ok) {
@@ -435,7 +440,7 @@ export const AdminPanel: React.FC = () => {
       reader.onload = async () => {
         const dataUrl = reader.result as string;
         try {
-          const res = await fetch('/api/upload', {
+          const res = await adminFetch('/api/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dataUrl, filename: file.name }),
@@ -545,7 +550,7 @@ export const AdminPanel: React.FC = () => {
     });
 
     // Load existing reviews for this product
-    fetch(`/api/reviews?productId=${product.id}`)
+    adminFetch(`/api/reviews?productId=${product.id}`)
       .then((r) => r.json())
       .then((revs) => {
         if (Array.isArray(revs) && revs.length > 0) {
@@ -609,7 +614,7 @@ export const AdminPanel: React.FC = () => {
     try {
       const activeHeader = `Bearer ${getAuthToken()}`;
       if (editingProduct) {
-        await fetch(`/api/products/${editingProduct.id}`, {
+        await adminFetch(`/api/products/${editingProduct.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -618,7 +623,7 @@ export const AdminPanel: React.FC = () => {
           body: JSON.stringify(payload),
         });
       } else {
-        await fetch('/api/products', {
+        await adminFetch('/api/products', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -632,7 +637,7 @@ export const AdminPanel: React.FC = () => {
       if (savedProductId && productReviewsList.length > 0) {
         for (const rev of productReviewsList) {
           if (rev.customerName.trim() && rev.comment.trim()) {
-            await fetch('/api/reviews', {
+            await adminFetch('/api/reviews', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -645,6 +650,7 @@ export const AdminPanel: React.FC = () => {
           }
         }
       }
+      refreshProducts();
       fetchMetrics();
     } catch {
       // Local state is already successfully saved
@@ -663,10 +669,11 @@ export const AdminPanel: React.FC = () => {
     showToast('Product deleted', 'info');
     fetchMetrics();
     try {
-      await fetch(`/api/products/${productId}`, {
+      await adminFetch(`/api/products/${productId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
+      refreshProducts();
     } catch {}
   };
 
@@ -682,7 +689,7 @@ export const AdminPanel: React.FC = () => {
     showToast(`Order status updated to ${newStatus}`, 'success');
     fetchMetrics();
     try {
-      await fetch(`/api/orders/${orderId}/status`, {
+      await adminFetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -770,7 +777,7 @@ export const AdminPanel: React.FC = () => {
     try {
       const activeHeader = `Bearer ${getAuthToken()}`;
       if (editingCategory) {
-        await fetch(`/api/categories/${editingCategory.id}`, {
+        await adminFetch(`/api/categories/${editingCategory.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -779,7 +786,7 @@ export const AdminPanel: React.FC = () => {
           body: JSON.stringify(payload),
         });
       } else {
-        await fetch('/api/categories', {
+        await adminFetch('/api/categories', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -788,6 +795,7 @@ export const AdminPanel: React.FC = () => {
           body: JSON.stringify(payload),
         });
       }
+      refreshCategories();
     } catch {
       // Local state is already successfully saved
     }
@@ -804,10 +812,11 @@ export const AdminPanel: React.FC = () => {
     });
     showToast(`Category "${catName}" deleted`, 'info');
     try {
-      await fetch(`/api/categories/${catId}`, {
+      await adminFetch(`/api/categories/${catId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
+      refreshCategories();
     } catch {}
   };
 
@@ -831,7 +840,7 @@ export const AdminPanel: React.FC = () => {
     // Attempt server sync if backend is active
     try {
       const activeTok = adminToken || 'smart-connect-admin-secure-token-2026';
-      const res = await fetch('/api/settings', {
+      const res = await adminFetch('/api/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -847,6 +856,7 @@ export const AdminPanel: React.FC = () => {
           localStorage.setItem('sc_settings', JSON.stringify(updated));
         } catch {}
       }
+      refreshSettings();
     } catch {
       // Local settings are already safely applied
     }
@@ -971,7 +981,7 @@ export const AdminPanel: React.FC = () => {
       setIsBannerModalOpen(false);
 
       try {
-        await fetch('/api/settings', {
+        await adminFetch('/api/settings', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -979,6 +989,7 @@ export const AdminPanel: React.FC = () => {
           },
           body: JSON.stringify(updatedSettings),
         });
+        refreshSettings();
       } catch {}
     } catch (err: any) {
       showToast(err.message || 'Error saving banner', 'error');
@@ -1003,7 +1014,7 @@ export const AdminPanel: React.FC = () => {
       showToast('Banner deleted successfully', 'info');
 
       try {
-        await fetch('/api/settings', {
+        await adminFetch('/api/settings', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -1011,6 +1022,7 @@ export const AdminPanel: React.FC = () => {
           },
           body: JSON.stringify(updatedSettings),
         });
+        refreshSettings();
       } catch {}
     } catch (err: any) {
       showToast(err.message || 'Error deleting banner', 'error');
@@ -1036,7 +1048,7 @@ export const AdminPanel: React.FC = () => {
       showToast('Banner visibility updated', 'success');
 
       try {
-        await fetch('/api/settings', {
+        await adminFetch('/api/settings', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -1044,6 +1056,7 @@ export const AdminPanel: React.FC = () => {
           },
           body: JSON.stringify(updatedSettings),
         });
+        refreshSettings();
       } catch {}
     } catch (err: any) {
       showToast(err.message || 'Error toggling banner status', 'error');

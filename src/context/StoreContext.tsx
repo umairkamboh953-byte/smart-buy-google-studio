@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { signOutGoogle } from '../utils/googleAuth.ts';
 import { sanitizeImagePath } from '../utils/imageUtils.ts';
+import { apiUrl } from '../utils/apiConfig.ts';
 import type {
   Product,
   Category,
@@ -329,12 +330,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [settings]);
 
-  // Safe fetch helper with timeout and JSON validation (preventing Netlify HTML SPA catchall errors)
-  const safeFetch = async (url: string, options?: RequestInit, timeoutMs = 3000) => {
+  // Safe fetch helper with cross-device API resolver, timeout, and JSON validation
+  const safeFetch = async (url: string, options?: RequestInit, timeoutMs = 8000) => {
+    const targetUrl = url.startsWith('http') ? url : apiUrl(url);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {
+      const res = await fetch(targetUrl, {
         ...options,
         signal: controller.signal,
       });
@@ -347,59 +349,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return res;
     } catch (err) {
       clearTimeout(timeoutId);
-      console.warn(`Safe fetch notice for ${url}:`, err);
       return null;
     }
   };
 
-  // Data fetchers with intelligent two-way merge
+  // Data fetchers - Server is the authoritative source for all laptops and mobiles
   const refreshProducts = useCallback(async () => {
     try {
       const res = await safeFetch('/api/products');
       if (res && res.ok) {
         const data: Product[] = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          try {
-            const localRaw = localStorage.getItem('sc_products');
-            if (localRaw) {
-              const localProds: Product[] = JSON.parse(localRaw);
-              if (Array.isArray(localProds) && localProds.length > 0) {
-                // Two-way merge: Preserve any local additions or edits
-                const mergedMap = new Map<string, Product>();
-                data.forEach((p) => mergedMap.set(p.id, p));
-
-                localProds.forEach((lp) => {
-                  const sp = mergedMap.get(lp.id);
-                  if (!sp) {
-                    // Local product not yet on server: Keep it and push to server
-                    mergedMap.set(lp.id, lp);
-                    safeFetch('/api/products', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: 'Bearer smart-connect-admin-secure-token-2026',
-                      },
-                      body: JSON.stringify(lp),
-                    }).catch(() => {});
-                  } else {
-                    const lTime = new Date(lp.updatedAt || 0).getTime() || 0;
-                    const sTime = new Date(sp.updatedAt || 0).getTime() || 0;
-                    if (lTime >= sTime) {
-                      mergedMap.set(lp.id, lp);
-                    }
-                  }
-                });
-
-                const mergedList = Array.from(mergedMap.values());
-                setProducts(mergedList);
-                try {
-                  localStorage.setItem('sc_products', JSON.stringify(mergedList));
-                } catch {}
-                return;
-              }
-            }
-          } catch {}
-
           setProducts(data);
           try {
             localStorage.setItem('sc_products', JSON.stringify(data));
@@ -417,40 +377,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (res && res.ok) {
         const data: Category[] = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          try {
-            const localRaw = localStorage.getItem('sc_categories');
-            if (localRaw) {
-              const localCats: Category[] = JSON.parse(localRaw);
-              if (Array.isArray(localCats) && localCats.length > 0) {
-                const mergedMap = new Map<string, Category>();
-                data.forEach((c) => mergedMap.set(c.id, c));
-
-                localCats.forEach((lc) => {
-                  if (!mergedMap.has(lc.id)) {
-                    mergedMap.set(lc.id, lc);
-                    safeFetch('/api/categories', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: 'Bearer smart-connect-admin-secure-token-2026',
-                      },
-                      body: JSON.stringify(lc),
-                    }).catch(() => {});
-                  } else {
-                    mergedMap.set(lc.id, lc);
-                  }
-                });
-
-                const mergedList = Array.from(mergedMap.values());
-                setCategories(mergedList);
-                try {
-                  localStorage.setItem('sc_categories', JSON.stringify(mergedList));
-                } catch {}
-                return;
-              }
-            }
-          } catch {}
-
           setCategories(data);
           try {
             localStorage.setItem('sc_categories', JSON.stringify(data));
@@ -468,28 +394,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (res && res.ok) {
         const data = await res.json();
         if (data && data.storeName) {
-          try {
-            const localRaw = localStorage.getItem('sc_settings');
-            if (localRaw) {
-              const localParsed = JSON.parse(localRaw);
-              const localTime = new Date(localParsed.updatedAt || 0).getTime() || 0;
-              const serverTime = new Date(data.updatedAt || 0).getTime() || 0;
-              if (localTime >= serverTime && localParsed.storeName) {
-                // Local edits are fresher or equal! Push them to server
-                safeFetch('/api/settings', {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: 'Bearer smart-connect-admin-secure-token-2026',
-                  },
-                  body: JSON.stringify(localParsed),
-                }).catch(() => {});
-                setSettings(localParsed);
-                return;
-              }
-            }
-          } catch {}
-
           setSettings(data);
           try {
             localStorage.setItem('sc_settings', JSON.stringify(data));
@@ -501,11 +405,30 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, []);
 
+  // Multi-Device Realtime Sync: Initial sync, 8s interval polling, and window focus sync
   useEffect(() => {
     const syncData = async () => {
       await Promise.allSettled([refreshProducts(), refreshCategories(), refreshSettings()]);
     };
+
+    // Initial sync
     syncData();
+
+    // Periodic live sync across devices (every 8 seconds)
+    const intervalId = setInterval(syncData, 8000);
+
+    // Sync immediately when user switches tabs or focuses browser on mobile/laptop
+    const handleFocus = () => {
+      syncData();
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleFocus);
+    };
   }, [refreshProducts, refreshCategories, refreshSettings]);
 
   // Real-time Multi-Tab Sync: When changes occur in any tab, update immediately in all other tabs

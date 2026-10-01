@@ -3,6 +3,7 @@ import { useStore } from '../context/StoreContext.tsx';
 import type { Customer, Order } from '../types/index.ts';
 import { formatPKR, formatDate } from '../utils/formatters.ts';
 import { GoogleAuthModal, GoogleLogoIcon } from './GoogleAuthModal.tsx';
+import { apiUrl } from '../utils/apiConfig.ts';
 import {
   User,
   ShoppingCart,
@@ -101,7 +102,7 @@ export const CustomerAccountModal: React.FC = () => {
       const queryParam = cleanQuery || customerUser?.email || customerUser?.phone;
       if (queryParam) {
         try {
-          const res = await fetch(`/api/orders/my-orders?query=${encodeURIComponent(queryParam)}`);
+          const res = await fetch(apiUrl(`/api/orders/my-orders?query=${encodeURIComponent(queryParam)}`));
           const contentType = res.headers.get('content-type') || '';
           if (res.ok && contentType.includes('application/json')) {
             serverOrders = await res.json();
